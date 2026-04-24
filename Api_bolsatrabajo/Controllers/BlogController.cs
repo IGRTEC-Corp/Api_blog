@@ -721,12 +721,43 @@ namespace Api_blog.Controllers
             _context.BlogPosts.Add(post);
             await _context.SaveChangesAsync();
 
+            // ===========================================
+            // REDES SOCIALES
+            // ===========================================
+            string blogUrl = $"https://igrtec.com/blog/{slug}";
+            
+            string facebookMessage = $@"🚀 Nueva tendencia tecnológica detectada
+
+{title}
+
+{keyword} está creciendo rápidamente en las búsquedas de tecnología en México.
+
+Lee el análisis completo en nuestro blog 👇
+{blogUrl}
+
+#Tecnologia #Software #IGRTEC #Innovacion";
+
+            bool fbSuccess = await PublishToFacebookOptimized(facebookMessage, blogUrl);
+            
+            string linkedinMessage = GenerateLinkedInMessage(keyword, title, blogUrl);
+            string linkedInResponse = "";
+            try
+            {
+                 linkedInResponse = await PublishLinkedIn(linkedinMessage);
+            }
+            catch(Exception ex)
+            {
+                 linkedInResponse = ex.Message;
+            }
+
             return Ok(new
             {
                 success = true,
                 keyword = keyword,
                 slug = slug,
-                image = imageUrl
+                image = imageUrl,
+                facebookPublished = fbSuccess,
+                linkedinPublished = !string.IsNullOrEmpty(linkedInResponse) && !linkedInResponse.Contains("Exception") // Comprobación muy básica
             });
         }
         [HttpGet("auto-trend23")]
@@ -969,10 +1000,9 @@ namespace Api_blog.Controllers
             await _context.SaveChangesAsync();
 
 
-            // =========================
-            // PUBLICAR EN FACEBOOK
-            // =========================
-
+            // ===========================================
+            // REDES SOCIALES
+            // ===========================================
             string blogUrl = $"https://igrtec.com/blog/{slug}";
 
             string facebookMessage =
@@ -987,75 +1017,31 @@ Lee el análisis completo en nuestro blog 👇
 
 #Tecnologia #Software #IGRTEC #Innovacion";
 
-            var pageId = "107013628010918";
-            var token = _facebookToken.PageToken;
+            bool fbSuccess = await PublishToFacebookOptimized(facebookMessage, blogUrl);
 
-            var fbContent = new FormUrlEncodedContent(new[]
-            {
-    new KeyValuePair<string,string>("message", facebookMessage),
-    new KeyValuePair<string,string>("link", blogUrl),
-    new KeyValuePair<string,string>("access_token", token)
-});
-
-            var fbResponse = await http.PostAsync(
-                $"https://graph.facebook.com/v19.0/{pageId}/feed",
-                fbContent);
-
-            var fbResult = await fbResponse.Content.ReadAsStringAsync();
-
-
-            // SI FALLA → RENOVAR TOKEN Y REINTENTAR
-            if (!fbResponse.IsSuccessStatusCode)
-            {
-                var newUserToken = await RenewUserToken(_facebookToken.UserToken);
-                var newPageToken = await GetPageToken(newUserToken);
-
-                _facebookToken.UserToken = newUserToken;
-                _facebookToken.PageToken = newPageToken;
-
-                var retryContent = new FormUrlEncodedContent(new[]
-                {
-        new KeyValuePair<string,string>("message", facebookMessage),
-        new KeyValuePair<string,string>("link", blogUrl),
-        new KeyValuePair<string,string>("access_token", newPageToken)
-    });
-
-                await http.PostAsync(
-                    $"https://graph.facebook.com/v19.0/{pageId}/feed",
-                    retryContent);
-            }
-
-
-            // generar mensaje dinámico
-            string linkedinMessage = GenerateLinkedInMessage(facebookMessage, title, blogUrl);
-
+            string linkedinMessage = GenerateLinkedInMessage(keyword, title, blogUrl);
+            string linkedInResponse = "";
             try
             {
-                //var result = await PublishLinkedIn(linkedinMessage);
-
-                return Ok(new
-                {
-                    success = true,
-                    message = linkedinMessage,
-                    linkedinResponse = ""
-                });
+                 linkedInResponse = await PublishLinkedIn(linkedinMessage);
             }
             catch (Exception ex)
             {
-                return BadRequest(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                 linkedInResponse = ex.Message;
             }
+
+
             return Ok(new
             {
                 success = true,
                 keyword = keyword,
                 slug = slug,
-                image = imageUrl
+                image = imageUrl,
+                facebookPublished = fbSuccess,
+                linkedinPublished = !string.IsNullOrEmpty(linkedInResponse) && !linkedInResponse.Contains("Exception")
             });
         }
+        
         [HttpGet("auto-trend2")]
         public async Task<IActionResult> AutoTrendPos2t3()
         {
@@ -1068,16 +1054,15 @@ Lee el análisis completo en nuestro blog 👇
             DateTime utcNow = DateTime.UtcNow;
 
             // 2. Definir la zona horaria de México (UTC-6)
-            // Nota para Windows Server: El ID es "Central Standard Time" (aplica para CDMX)
             TimeZoneInfo mexicoZone = TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time");
 
             // 3. Convertir la hora UTC a la hora local de México
             DateTime mexicoTime = TimeZoneInfo.ConvertTimeFromUtc(utcNow, mexicoZone);
             DateTime todayInMexico = mexicoTime.Date;
 
-            // 4. Contar los posts, convirtiendo también la fecha de creación a la hora de México
+            // 4. Contar los posts
             var postsToday = _context.BlogPosts
-                .AsEnumerable() // Traemos a memoria para poder hacer la conversión de zona horaria
+                .AsEnumerable() 
                 .Count(p => TimeZoneInfo.ConvertTimeFromUtc(p.CreatedAt, mexicoZone).Date == todayInMexico);
 
 
@@ -1325,14 +1310,12 @@ ecosistema digital.
             _context.BlogPosts.Add(post);
             await _context.SaveChangesAsync();
 
-            // =========================
-            // FACEBOOK POST
-            // =========================
-
+            // ===========================================
+            // REDES SOCIALES
+            // ===========================================
             string blogUrl = $"https://igrtec.com/blog/{slug}";
 
-            string facebookMessage =
-        $@"🚀 {newsTitle}
+            string facebookMessage = $@"🚀 {newsTitle}
 
 {newsSnippet}
 
@@ -1341,31 +1324,32 @@ Lee el análisis completo 👇
 
 #Tecnologia #Software #IGRTEC #Innovacion";
 
-            var pageId = "107013628010918";
-            var token = _facebookToken.PageToken;
-
-            var fbContent = new FormUrlEncodedContent(new[]
+            bool fbSuccess = await PublishToFacebookOptimized(facebookMessage, blogUrl);
+            
+            string linkedinMessage = GenerateLinkedInMessage(keyword, title, blogUrl);
+            string linkedInResponse = "";
+            try
             {
-        new KeyValuePair<string,string>("message", facebookMessage),
-        new KeyValuePair<string,string>("link", blogUrl),
-        new KeyValuePair<string,string>("access_token", token)
-    });
-
-            await http.PostAsync(
-                $"https://graph.facebook.com/v19.0/{pageId}/feed",
-                fbContent);
+                 linkedInResponse = await PublishLinkedIn(linkedinMessage);
+            }
+            catch (Exception ex)
+            {
+                 linkedInResponse = ex.Message;
+            }
 
             return Ok(new
             {
                 success = true,
                 keyword,
                 slug,
-                imageUrl
+                imageUrl,
+                facebookPublished = fbSuccess,
+                linkedinPublished = !string.IsNullOrEmpty(linkedInResponse) && !linkedInResponse.Contains("Exception")
             });
-        }
+        } // Fin del método AutoTrendPos2t3
 
 
-[HttpGet("auto-news-tech")]
+        [HttpGet("auto-news-tech")]
     public async Task<IActionResult> AutoNewsTech()
     {
         var today = DateTime.UtcNow.Date;
@@ -1558,9 +1542,10 @@ tecnológico de IGRTEC.
 
         _context.BlogPosts.Add(post);
         await _context.SaveChangesAsync();
-            // =========================
-            // PUBLICAR EN FACEBOOK
-            // =========================
+            
+            // ===========================================
+            // REDES SOCIALES
+            // ===========================================
 
             string blogUrl = $"https://igrtec.com/blog/{slug}";
 
@@ -1579,28 +1564,28 @@ Lee el análisis completo en nuestro blog:
 
 #InteligenciaArtificial #Tecnologia #Software #Innovacion #IGRTEC";
 
-            var pageId = "107013628010918";
-            var token = _facebookToken.PageToken;
-
-            var fbContent = new FormUrlEncodedContent(new[]
+            bool fbSuccess = await PublishToFacebookOptimized(facebookMessage, blogUrl);
+            
+            string linkedinMessage = GenerateLinkedInMessage("Noticias de tecnología", title, blogUrl);
+            string linkedInResponse = "";
+            try
             {
-    new KeyValuePair<string,string>("message", facebookMessage),
-    new KeyValuePair<string,string>("link", blogUrl),
-    new KeyValuePair<string,string>("access_token", token)
-});
-                
-            var fbResponse = await http.PostAsync(
-                $"https://graph.facebook.com/v19.0/{pageId}/feed",
-                fbContent);
+                 linkedInResponse = await PublishLinkedIn(linkedinMessage);
+            }
+            catch (Exception ex)
+            {
+                 linkedInResponse = ex.Message;
+            }
 
-            var fbResult = await fbResponse.Content.ReadAsStringAsync();
 
             return Ok(new
         {
             success = true,
             title,
             slug,
-            imageUrl
+            imageUrl,
+            facebookPublished = fbSuccess,
+            linkedinPublished = !string.IsNullOrEmpty(linkedInResponse) && !linkedInResponse.Contains("Exception")
         });
     }
     private string GenerateLinkedInMessage(string keyword, string title, string blogUrl)
@@ -1710,31 +1695,30 @@ Lee el análisis completo en nuestro blog:
             client.DefaultRequestHeaders.Clear();
             client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-            // Usamos una versión estable y soportada
-            client.DefaultRequestHeaders.Add("LinkedIn-Version", "202510");
+            // Usamos una versión estable y soportada (202602) unificada para ambos métodos
+            client.DefaultRequestHeaders.Add("LinkedIn-Version", "202602");
             client.DefaultRequestHeaders.Add("X-Restli-Protocol-Version", "2.0.0");
 
             var body = new Dictionary<string, object>
-{
-    // AQUI ESTÁ EL CAMBIO: El author debe ser un objeto, no un string directo
-    { "author", "urn:li:organization:80985944" },
-    { "lifecycleState", "PUBLISHED" },
-    { "specificContent", new Dictionary<string, object>
-        {
-            { "com.linkedin.ugc.ShareContent", new Dictionary<string, object>
-                {
-                    { "shareCommentary", new { text = message } },
-                    { "shareMediaCategory", "NONE" }
+            {
+                { "author", authorUrn },
+                { "lifecycleState", "PUBLISHED" },
+                { "specificContent", new Dictionary<string, object>
+                    {
+                        { "com.linkedin.ugc.ShareContent", new Dictionary<string, object>
+                            {
+                                { "shareCommentary", new { text = message } },
+                                { "shareMediaCategory", "NONE" }
+                            }
+                        }
+                    }
+                },
+                { "visibility", new Dictionary<string, object>
+                    {
+                        { "com.linkedin.ugc.MemberNetworkVisibility", "PUBLIC" }
+                    }
                 }
-            }
-        }
-    },
-    { "visibility", new Dictionary<string, object>
-        {
-            { "com.linkedin.ugc.MemberNetworkVisibility", "PUBLIC" }
-        }
-    }
-};
+            };
             var json = Newtonsoft.Json.JsonConvert.SerializeObject(body);
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
 
@@ -1754,7 +1738,8 @@ Lee el análisis completo en nuestro blog:
             client.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-            client.DefaultRequestHeaders.Add("LinkedIn-Version", "202510");
+            // Versión unificada
+            client.DefaultRequestHeaders.Add("LinkedIn-Version", "202602");
             client.DefaultRequestHeaders.Add("X-Restli-Protocol-Version", "2.0.0");
 
             // Endpoint para listar organizaciones donde eres admin
@@ -1764,47 +1749,7 @@ Lee el análisis completo en nuestro blog:
             return Ok(new { status = response.StatusCode, response = result });
         }
 
-    //    [HttpGet("linkedin-test-post")]
-    //    public async Task<IActionResult> LinkedInTestPost()
-    //    {
-    //        string token = "AQUoyC0G9-G8ON5zW2NvcQI3qHGOi5afITy4ahCaHPNQUKQjtuULyNGUUn7S8cNkUqgIAj9Jy_udM7fOLHym78qOsUZ1vQIcXUmKBQuwpWGuJAMOBc9Rq0svwc1ejyYV3_ecfC_YoWMxZBiDuLlzhOHR1s_bvscrU1r-GCL-Qz_QNnS54fruzcz7TrNxl1fpJIDxGUT2x3Z7WsAQS4BRiSxZpm_aI4QmBT2pqmRK5UheaphxDEch7JrxWW5hqd7rTQ1i5swRhjDrG_JYmO_pSdgNDVHkk6_mDAG5GTHIy-daR7ukX0Cjn8mLESyzQyM3an_cGK02pEc_APO4gnd5hiaWsy6Jsg";
 
-    //        using var client = new HttpClient();
-    //        client.DefaultRequestHeaders.Clear();
-    //        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-    //        client.DefaultRequestHeaders.Add("LinkedIn-Version", "202401");
-    //        client.DefaultRequestHeaders.Add("X-Restli-Protocol-Version", "2.0.0");
-
-    //        // Construimos el JSON manualmente como un objeto de diccionario para preservar los puntos
-    //        var body = new Dictionary<string, object>
-    //{
-    //    { "author", "urn:li:person:X8h1ZSRN6B" },
-    //    { "lifecycleState", "PUBLISHED" },
-    //    { "specificContent", new Dictionary<string, object>
-    //        {
-    //            { "com.linkedin.ugc.ShareContent", new Dictionary<string, object>
-    //                {
-    //                    { "shareCommentary", new { text = "🚀 Prueba LinkedIn API desde IGRTEC4" } },
-    //                    { "shareMediaCategory", "NONE" }
-    //                }
-    //            }
-    //        }
-    //    },
-    //    { "visibility", new Dictionary<string, object>
-    //        {
-    //            { "com.linkedin.ugc.MemberNetworkVisibility", "PUBLIC" }
-    //        }
-    //    }
-    //};
-
-    //        var json = Newtonsoft.Json.JsonConvert.SerializeObject(body);
-    //        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
-    //        var response = await client.PostAsync("https://api.linkedin.com/v2/ugcPosts", content);
-    //        var result = await response.Content.ReadAsStringAsync();
-
-    //        return Ok(new { status = response.StatusCode, response = result });
-    //    }
         [HttpGet("get-my-linkedin-profile")]
         public async Task<IActionResult> GetMyProfile()
         {
@@ -1818,7 +1763,7 @@ Lee el análisis completo en nuestro blog:
             // ESTA ES LA FORMA CORRECTA DE AÑADIR EL TOKEN
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
-            // Encabezados obligatorios para la API de LinkedIn
+            // Encabezados obligatorios para la API de LinkedIn, versión unificada
             request.Headers.Add("LinkedIn-Version", "202602");
             request.Headers.Add("X-Restli-Protocol-Version", "2.0.0");
 
@@ -1862,9 +1807,61 @@ Lee el análisis completo en nuestro blog:
 
             return Ok(result);
         }
+        
         // =========================
         // HELPERS
         // =========================
+
+        // --- EL HELPER DEFINITIVO DE FACEBOOK ---
+        private async Task<bool> PublishToFacebookOptimized(string message, string linkUrl)
+        {
+            var pageId = "107013628010918";
+            using var http = new HttpClient();
+
+            var fbContent = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string,string>("message", message),
+                new KeyValuePair<string,string>("link", linkUrl),
+                new KeyValuePair<string,string>("access_token", _facebookToken.PageToken)
+            });
+
+            // 1. PRIMER INTENTO: Publicar con el token actual
+            var response = await http.PostAsync($"https://graph.facebook.com/v19.0/{pageId}/feed", fbContent);
+
+            if (response.IsSuccessStatusCode)
+                return true; // Éxito rotundo a la primera
+
+            // 2. PROTOCOLO DE RESCATE: Si falló, renovamos tokens
+            try
+            {
+                var newUserToken = await RenewUserToken(_facebookToken.UserToken);
+                if (string.IsNullOrEmpty(newUserToken)) return false;
+
+                var newPageToken = await GetPageToken(newUserToken);
+                if (string.IsNullOrEmpty(newPageToken)) return false;
+
+                // Actualizamos en memoria para este request
+                _facebookToken.UserToken = newUserToken;
+                _facebookToken.PageToken = newPageToken;
+
+                var retryContent = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string,string>("message", message),
+                    new KeyValuePair<string,string>("link", linkUrl),
+                    new KeyValuePair<string,string>("access_token", newPageToken)
+                });
+
+                // 3. SEGUNDO INTENTO: Publicar con el token fresco
+                var retryResponse = await http.PostAsync($"https://graph.facebook.com/v19.0/{pageId}/feed", retryContent);
+
+                return retryResponse.IsSuccessStatusCode;
+            }
+            catch
+            {
+                // Si la red falla o Facebook rechaza la renovación, no tumbamos la API
+                return false; 
+            }
+        }
 
         private string GenerateSlug(string title)
         {
