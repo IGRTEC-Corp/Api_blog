@@ -1059,11 +1059,27 @@ Lee el análisis completo en nuestro blog 👇
         [HttpGet("auto-trend2")]
         public async Task<IActionResult> AutoTrendPos2t3()
         {
-            var today = DateTime.UtcNow.Date;
+            // =========================
+            // VALIDACIÓN ZONA HORARIA (MÉXICO)
+            // =========================
             int maxPostsPerDay = 3;
 
+            // 1. Obtener la hora actual en UTC
+            DateTime utcNow = DateTime.UtcNow;
+
+            // 2. Definir la zona horaria de México (UTC-6)
+            // Nota para Windows Server: El ID es "Central Standard Time" (aplica para CDMX)
+            TimeZoneInfo mexicoZone = TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time");
+
+            // 3. Convertir la hora UTC a la hora local de México
+            DateTime mexicoTime = TimeZoneInfo.ConvertTimeFromUtc(utcNow, mexicoZone);
+            DateTime todayInMexico = mexicoTime.Date;
+
+            // 4. Contar los posts, convirtiendo también la fecha de creación a la hora de México
             var postsToday = _context.BlogPosts
-                .Count(p => p.CreatedAt.Date == today);
+                .AsEnumerable() // Traemos a memoria para poder hacer la conversión de zona horaria
+                .Count(p => TimeZoneInfo.ConvertTimeFromUtc(p.CreatedAt, mexicoZone).Date == todayInMexico);
+
 
             if (postsToday >= maxPostsPerDay)
             {
