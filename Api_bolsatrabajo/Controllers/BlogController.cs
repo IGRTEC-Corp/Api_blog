@@ -146,7 +146,7 @@ namespace Api_blog.Controllers
             post.UpdatedAt = DateTime.UtcNow;
             post.Slug = GenerateSlug(model.Title);
 
-            _context.Update(post);
+            _context.Update(post);  
             _context.SaveChanges();
 
             return Ok(post);
@@ -425,6 +425,8 @@ namespace Api_blog.Controllers
 
             using var http = new HttpClient();
 
+       
+
             // =========================
             // CONSULTAR TRENDS
             // =========================
@@ -445,6 +447,9 @@ namespace Api_blog.Controllers
 
             string keyword = null;
 
+            // =========================
+            // FILTRO ORIGINAL (EL QUE TE FUNCIONABA)
+            // =========================
             // =========================
             // FILTROS DE RELEVANCIA
             // =========================
@@ -481,36 +486,25 @@ namespace Api_blog.Controllers
 
                 var keywordLower = k.ToLower();
 
+                // excluir keywords no deseadas
                 if (excludedKeywords.Any(e => keywordLower.Contains(e)))
                     continue;
 
-                // --- INICIO MEJORA CATEGORIA ---
-                bool isTech = false;
-
-                if (t.TryGetProperty("categories", out var categories) && categories.GetArrayLength() > 0)
+                // verificar categoria technology
+                if (t.TryGetProperty("categories", out var categories) &&
+                    categories.GetArrayLength() > 0)
                 {
-                    var categoryName = categories[0].GetProperty("name").GetString().ToLower();
-                    if (categoryName.Contains("tech") || categoryName.Contains("tecno") || categoryName.Contains("ciencia"))
-                    {
-                        isTech = true;
-                    }
-                }
+                    var categoryName = categories[0].GetProperty("name").GetString();
 
-                if (!isTech)
-                {
-                    var techKeywords = new[] { "ai", "artificial", "inteligencia", "technology", "tecnologia", "software", "startup", "robot", "machine learning", "openai", "google", "microsoft", "apple", "nvidia", "meta", "chatgpt" };
-                    if (techKeywords.Any(kw => keywordLower.Contains(kw)))
-                    {
-                        isTech = true;
-                    }
+                    if (categoryName != "Technology")
+                        continue;
                 }
-
-                if (!isTech)
+                else
                 {
                     continue;
                 }
-                // --- FIN MEJORA CATEGORIA ---
 
+                // verificar que tenga relación con tecnología empresarial
                 bool isBusinessTech = businessTechKeywords
                     .Any(tk => keywordLower.Contains(tk));
 
@@ -731,7 +725,7 @@ namespace Api_blog.Controllers
             // REDES SOCIALES
             // ===========================================
             string blogUrl = $"https://igrtec.com/blog/{slug}";
-
+            
             string facebookMessage = $@"🚀 Nueva tendencia tecnológica detectada
 
 {title}
@@ -744,16 +738,16 @@ Lee el análisis completo en nuestro blog 👇
 #Tecnologia #Software #IGRTEC #Innovacion";
 
             bool fbSuccess = await PublishToFacebookOptimized(facebookMessage, blogUrl);
-
+            
             string linkedinMessage = GenerateLinkedInMessage(keyword, title, blogUrl);
             string linkedInResponse = "";
             try
             {
-                linkedInResponse = await PublishLinkedIn(linkedinMessage);
+                 linkedInResponse = await PublishLinkedIn(linkedinMessage);
             }
-            catch (Exception ex)
+            catch(Exception ex)
             {
-                linkedInResponse = ex.Message;
+                 linkedInResponse = ex.Message;
             }
 
             return Ok(new
@@ -763,15 +757,18 @@ Lee el análisis completo en nuestro blog 👇
                 slug = slug,
                 image = imageUrl,
                 facebookPublished = fbSuccess,
-                linkedinPublished = !string.IsNullOrEmpty(linkedInResponse) && !linkedInResponse.Contains("Exception")
+                linkedinPublished = !string.IsNullOrEmpty(linkedInResponse) && !linkedInResponse.Contains("Exception") // Comprobación muy básica
             });
         }
-
         [HttpGet("auto-trend23")]
         public async Task<IActionResult> AutoTrendPos2t()
         {
             var today = DateTime.UtcNow.Date;
             int maxPostsPerDay = 3;
+
+            // =========================
+            // VALIDAR POSTS DEL DIA
+            // =========================
 
             var postsToday = _context.BlogPosts
                 .Count(p => p.CreatedAt.Date == today);
@@ -786,6 +783,10 @@ Lee el análisis completo en nuestro blog 👇
             }
 
             using var http = new HttpClient();
+
+            // =========================
+            // CONSULTAR TRENDS
+            // =========================
 
             string serpApiKey = "503b77863a85bb82a6a694b9d8da6bc7a937c89eb3f824c2150018f1435c9d75";
 
@@ -805,37 +806,27 @@ Lee el análisis completo en nuestro blog 👇
 
             string keyword = null;
 
+            // =========================
+            // BUSCAR TREND VALIDO
+            // =========================
+
             foreach (var t in trends.EnumerateArray())
             {
                 var k = t.GetProperty("query").GetString();
 
-                // --- INICIO MEJORA CATEGORIA ---
-                bool isTech = false;
-
-                if (t.TryGetProperty("categories", out var categories) && categories.GetArrayLength() > 0)
+                // verificar categoria
+                if (t.TryGetProperty("categories", out var categories) &&
+                    categories.GetArrayLength() > 0)
                 {
-                    var categoryName = categories[0].GetProperty("name").GetString().ToLower();
-                    if (categoryName.Contains("tech") || categoryName.Contains("tecno") || categoryName.Contains("ciencia"))
-                    {
-                        isTech = true;
-                    }
-                }
+                    var categoryName = categories[0].GetProperty("name").GetString();
 
-                if (!isTech)
-                {
-                    var keywordLower = k.ToLower();
-                    var techKeywords = new[] { "ai", "artificial", "inteligencia", "technology", "tecnologia", "software", "startup", "robot", "machine learning", "openai", "google", "microsoft", "apple", "nvidia", "meta", "chatgpt" };
-                    if (techKeywords.Any(kw => keywordLower.Contains(kw)))
-                    {
-                        isTech = true;
-                    }
+                    if (categoryName != "Technology")
+                        continue; // ignorar si no es tecnologia
                 }
-
-                if (!isTech)
+                else
                 {
                     continue;
                 }
-                // --- FIN MEJORA CATEGORIA ---
 
                 var normalized = NormalizeKeyword(k);
                 var existsKeyword = _context.BlogPosts
@@ -858,8 +849,17 @@ Lee el análisis completo en nuestro blog 👇
                 });
             }
 
+            // =========================
+            // GENERAR TITULO
+            // =========================
+
             string title = $"¿Qué está pasando con {keyword}? Tendencia tecnológica en México";
+
             var slug = GenerateSlug(title);
+
+            // =========================
+            // VALIDAR DUPLICADOS
+            // =========================
 
             var exists = _context.BlogPosts
                 .Any(p => p.Slug == slug);
@@ -872,6 +872,10 @@ Lee el análisis completo en nuestro blog 👇
                     message = "Post duplicado"
                 });
             }
+
+            // =========================
+            // BUSCAR IMAGEN PEXELS
+            // =========================
 
             string imageUrl = null;
 
@@ -901,33 +905,51 @@ Lee el análisis completo en nuestro blog 👇
             }
             catch { }
 
+            // fallback si no hay imagen
             if (string.IsNullOrEmpty(imageUrl))
                 imageUrl = "/images/blog/technology.jpg";
+
+            // =========================
+            // CREAR CONTENIDO
+            // =========================
 
             var introTemplates = new[]
             {
     $"En las últimas horas, el término <strong>{keyword}</strong> ha comenzado a aparecer entre las búsquedas más populares en México, lo que indica que el tema está captando la atención de miles de usuarios.",
+
     $"El interés por <strong>{keyword}</strong> ha crecido rápidamente en internet durante las últimas horas. Este tipo de tendencias suele reflejar nuevos lanzamientos, anuncios o cambios dentro del sector tecnológico.",
+
     $"Las búsquedas relacionadas con <strong>{keyword}</strong> están aumentando en México. Cuando un tema comienza a posicionarse entre las tendencias, normalmente significa que algo relevante está ocurriendo en el ecosistema digital.",
+
     $"Durante las últimas horas, <strong>{keyword}</strong> ha comenzado a generar conversación entre usuarios y medios tecnológicos. Este incremento en las búsquedas suele estar relacionado con novedades o anuncios recientes.",
+
     $"El término <strong>{keyword}</strong> se ha posicionado entre las búsquedas destacadas del momento. Este tipo de movimientos suele indicar que el tema está despertando interés dentro del mundo tecnológico.",
+
     $"En el entorno digital actual, cuando un término como <strong>{keyword}</strong> comienza a destacar en las tendencias de búsqueda, suele ser una señal de que algo importante está ocurriendo alrededor de esa tecnología o producto."
 };
 
             var impactTemplates = new[]
             {
     $"Para empresas y profesionales del sector tecnológico, este tipo de tendencias puede ofrecer pistas sobre hacia dónde se está moviendo el mercado digital.",
+
     $"Observar este tipo de tendencias permite entender qué tecnologías están despertando mayor interés entre los usuarios y las empresas.",
+
     $"El crecimiento de estas búsquedas suele reflejar cambios en el comportamiento digital de los usuarios o el lanzamiento de nuevas soluciones tecnológicas.",
+
     $"Cuando un tema comienza a ganar relevancia en las búsquedas, muchas veces está relacionado con innovaciones, actualizaciones o nuevas herramientas que comienzan a captar la atención del público.",
+
     $"Analizar estas tendencias también ayuda a identificar oportunidades tecnológicas que podrían impactar a empresas, desarrolladores y usuarios en los próximos meses."
 };
             var closingTemplates = new[]
             {
     $"Habrá que observar cómo evoluciona el interés por <strong>{keyword}</strong> durante los próximos días y si continúa posicionándose entre los temas más buscados.",
+
     $"Seguiremos atentos a las novedades relacionadas con <strong>{keyword}</strong> y al impacto que pueda tener dentro del ecosistema tecnológico.",
+
     $"El comportamiento de estas tendencias puede ofrecer señales tempranas sobre cambios en el sector digital y las tecnologías que podrían dominar las próximas conversaciones.",
+
     $"En un entorno tecnológico que evoluciona rápidamente, este tipo de tendencias suele anticipar novedades relevantes para empresas y usuarios.",
+
     $"A medida que el interés por <strong>{keyword}</strong> continúa creciendo, será interesante ver qué desarrollos o anuncios aparecen alrededor de este tema."
 };
 
@@ -935,7 +957,9 @@ Lee el análisis completo en nuestro blog 👇
             var contextTemplates = new[]
 {
     $"En muchos casos, cuando un término como <strong>{keyword}</strong> comienza a generar búsquedas masivas, suele estar vinculado a anuncios recientes, actualizaciones de producto o nuevas funcionalidades.",
+
     $"Este tipo de picos en las búsquedas suele aparecer cuando una tecnología empieza a captar atención en redes sociales, medios especializados o eventos del sector.",
+
     $"La rapidez con la que <strong>{keyword}</strong> ha comenzado a aparecer en las búsquedas refleja cómo la información tecnológica puede difundirse rápidamente en el entorno digital."
 };
             var random = new Random();
@@ -949,6 +973,10 @@ Lee el análisis completo en nuestro blog 👇
                 $"<p>{intro}</p>" +
                 $"<p>{impact}</p>" +
                 $"<p>{closing}</p>";
+
+            // =========================
+            // CREAR POST
+            // =========================
 
             var post = new BlogPost
             {
@@ -995,11 +1023,11 @@ Lee el análisis completo en nuestro blog 👇
             string linkedInResponse = "";
             try
             {
-                linkedInResponse = await PublishLinkedIn(linkedinMessage);
+                 linkedInResponse = await PublishLinkedIn(linkedinMessage);
             }
             catch (Exception ex)
             {
-                linkedInResponse = ex.Message;
+                 linkedInResponse = ex.Message;
             }
 
 
@@ -1013,7 +1041,7 @@ Lee el análisis completo en nuestro blog 👇
                 linkedinPublished = !string.IsNullOrEmpty(linkedInResponse) && !linkedInResponse.Contains("Exception")
             });
         }
-
+        
         [HttpGet("auto-trend2")]
         public async Task<IActionResult> AutoTrendPos2t3()
         {
@@ -1034,7 +1062,7 @@ Lee el análisis completo en nuestro blog 👇
 
             // 4. Contar los posts
             var postsToday = _context.BlogPosts
-                .AsEnumerable()
+                .AsEnumerable() 
                 .Count(p => TimeZoneInfo.ConvertTimeFromUtc(p.CreatedAt, mexicoZone).Date == todayInMexico);
 
 
@@ -1075,33 +1103,18 @@ Lee el análisis completo en nuestro blog 👇
             {
                 var k = t.GetProperty("query").GetString();
 
-                // --- INICIO MEJORA CATEGORIA ---
-                bool isTech = false;
-
-                if (t.TryGetProperty("categories", out var categories) && categories.GetArrayLength() > 0)
+                if (t.TryGetProperty("categories", out var categories) &&
+                    categories.GetArrayLength() > 0)
                 {
-                    var categoryName = categories[0].GetProperty("name").GetString().ToLower();
-                    if (categoryName.Contains("tech") || categoryName.Contains("tecno") || categoryName.Contains("ciencia"))
-                    {
-                        isTech = true;
-                    }
-                }
+                    var categoryName = categories[0].GetProperty("name").GetString();
 
-                if (!isTech)
-                {
-                    var keywordLower = k.ToLower();
-                    var techKeywords = new[] { "ai", "artificial", "inteligencia", "technology", "tecnologia", "software", "startup", "robot", "machine learning", "openai", "google", "microsoft", "apple", "nvidia", "meta", "chatgpt" };
-                    if (techKeywords.Any(kw => keywordLower.Contains(kw)))
-                    {
-                        isTech = true;
-                    }
+                    if (categoryName != "Technology")
+                        continue;
                 }
-
-                if (!isTech)
+                else
                 {
-                    continue; // Ignorar si no tiene que ver con tecnología
+                    continue;
                 }
-                // --- FIN MEJORA CATEGORIA ---
 
                 var normalized = NormalizeKeyword(k);
 
@@ -1312,16 +1325,16 @@ Lee el análisis completo 👇
 #Tecnologia #Software #IGRTEC #Innovacion";
 
             bool fbSuccess = await PublishToFacebookOptimized(facebookMessage, blogUrl);
-
+            
             string linkedinMessage = GenerateLinkedInMessage(keyword, title, blogUrl);
             string linkedInResponse = "";
             try
             {
-                linkedInResponse = await PublishLinkedIn(linkedinMessage);
+                 linkedInResponse = await PublishLinkedIn(linkedinMessage);
             }
             catch (Exception ex)
             {
-                linkedInResponse = ex.Message;
+                 linkedInResponse = ex.Message;
             }
 
             return Ok(new
@@ -1337,41 +1350,41 @@ Lee el análisis completo 👇
 
 
         [HttpGet("auto-news-tech")]
-        public async Task<IActionResult> AutoNewsTech()
+    public async Task<IActionResult> AutoNewsTech()
+    {
+        var today = DateTime.UtcNow.Date;
+        int maxPostsPerDay = 5;
+
+        var postsToday = _context.BlogPosts
+            .Count(p => p.CreatedAt.Date == today);
+
+        if (postsToday >= maxPostsPerDay)
         {
-            var today = DateTime.UtcNow.Date;
-            int maxPostsPerDay = 5;
-
-            var postsToday = _context.BlogPosts
-                .Count(p => p.CreatedAt.Date == today);
-
-            if (postsToday >= maxPostsPerDay)
+            return Ok(new
             {
-                return Ok(new
-                {
-                    success = false,
-                    message = "Límite diario alcanzado"
-                });
-            }
-
-            // =========================
-            // CONSULTAR NEWS API
-            // =========================
-
-            var newsApiClient = new NewsApiClient("c0a6855dab554242b3db0aaf72e5f632");
-
-            var articlesResponse = newsApiClient.GetEverything(new EverythingRequest
-            {
-                Q = "artificial intelligence OR AI OR technology OR software",
-                SortBy = SortBys.PublishedAt,
-                Language = Languages.ES,
-                PageSize = 20
+                success = false,
+                message = "Límite diario alcanzado"
             });
+        }
 
-            if (articlesResponse.Status != Statuses.Ok)
-                return BadRequest("Error consultando NewsAPI");
+        // =========================
+        // CONSULTAR NEWS API
+        // =========================
 
-            Article selectedArticle = null;
+        var newsApiClient = new NewsApiClient("c0a6855dab554242b3db0aaf72e5f632");
+
+        var articlesResponse = newsApiClient.GetEverything(new EverythingRequest
+        {
+            Q = "artificial intelligence OR AI OR technology OR software",
+            SortBy = SortBys.PublishedAt,
+            Language = Languages.ES,
+            PageSize = 20
+        });
+
+        if (articlesResponse.Status != Statuses.Ok)
+            return BadRequest("Error consultando NewsAPI");
+
+        Article selectedArticle = null;
             var techKeywords = new[]
             {
     "ai","artificial","inteligencia","technology","tecnologia",
@@ -1400,28 +1413,28 @@ Lee el análisis completo 👇
             }
 
             if (selectedArticle == null)
+        {
+            return Ok(new
             {
-                return Ok(new
-                {
-                    success = false,
-                    message = "No se encontró noticia nueva"
-                });
-            }
+                success = false,
+                message = "No se encontró noticia nueva"
+            });
+        }
 
-            string title = selectedArticle.Title;
-            string description = selectedArticle.Description;
-            string source = selectedArticle.Source.Name;
-            string url = selectedArticle.Url;
+        string title = selectedArticle.Title;
+        string description = selectedArticle.Description;
+        string source = selectedArticle.Source.Name;
+        string url = selectedArticle.Url;
 
-            var slug = GenerateSlug(title);
+        var slug = GenerateSlug(title);
 
-            // =========================
-            // BUSCAR IMAGEN PEXELS
-            // =========================
+        // =========================
+        // BUSCAR IMAGEN PEXELS
+        // =========================
 
-            using var http = new HttpClient();
+        using var http = new HttpClient();
 
-            string imageUrl = null;
+        string imageUrl = null;
             var query = Uri.EscapeDataString(title);
 
             try
@@ -1431,16 +1444,16 @@ Lee el análisis completo 👇
                 var imgResponse = await http.GetAsync(
                 $"https://api.pexels.com/v1/search?query={query}&per_page=5");
 
-                if (imgResponse.IsSuccessStatusCode)
+            if (imgResponse.IsSuccessStatusCode)
+            {
+                var imgJson = await imgResponse.Content.ReadAsStringAsync();
+
+                using var imgDoc = JsonDocument.Parse(imgJson);
+
+                var photos = imgDoc.RootElement.GetProperty("photos");
+
+                if (photos.GetArrayLength() > 0)
                 {
-                    var imgJson = await imgResponse.Content.ReadAsStringAsync();
-
-                    using var imgDoc = JsonDocument.Parse(imgJson);
-
-                    var photos = imgDoc.RootElement.GetProperty("photos");
-
-                    if (photos.GetArrayLength() > 0)
-                    {
                         var index = Random.Shared.Next(photos.GetArrayLength());
 
                         var photo = photos[index];
@@ -1450,18 +1463,18 @@ Lee el análisis completo 👇
                             .GetProperty("large")
                             .GetString();
                     }
-                }
             }
-            catch { }
+        }
+        catch { }
 
-            if (string.IsNullOrEmpty(imageUrl))
-                imageUrl = "/images/blog/technology.jpg";
+        if (string.IsNullOrEmpty(imageUrl))
+            imageUrl = "/images/blog/technology.jpg";
 
-            // =========================
-            // CONTENIDO DEL POST
-            // =========================
+        // =========================
+        // CONTENIDO DEL POST
+        // =========================
 
-            string content = $@"
+        string content = $@"
 
 <h1>{title}</h1>
 
@@ -1505,31 +1518,31 @@ tecnológico de IGRTEC.
 </p>
 ";
 
-            // =========================
-            // CREAR POST
-            // =========================
+        // =========================
+        // CREAR POST
+        // =========================
 
-            var post = new BlogPost
-            {
-                Title = title,
-                Summary = description,
-                Content = content,
-                MetaTitle = title,
-                MetaDescription = description,
-                MetaKeywords = "AI, Artificial Intelligence, Technology",
-                AuthorName = "IGRTEC",
-                Slug = slug,
-                FeaturedImageUrl = imageUrl,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                PublishedAt = DateTime.UtcNow,
-                IsPublished = true,
-                Views = 0
-            };
+        var post = new BlogPost
+        {
+            Title = title,
+            Summary = description,
+            Content = content,
+            MetaTitle = title,
+            MetaDescription = description,
+            MetaKeywords = "AI, Artificial Intelligence, Technology",
+            AuthorName = "IGRTEC",
+            Slug = slug,
+            FeaturedImageUrl = imageUrl,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            PublishedAt = DateTime.UtcNow,
+            IsPublished = true,
+            Views = 0
+        };
 
-            _context.BlogPosts.Add(post);
-            await _context.SaveChangesAsync();
-
+        _context.BlogPosts.Add(post);
+        await _context.SaveChangesAsync();
+            
             // ===========================================
             // REDES SOCIALES
             // ===========================================
@@ -1552,30 +1565,30 @@ Lee el análisis completo en nuestro blog:
 #InteligenciaArtificial #Tecnologia #Software #Innovacion #IGRTEC";
 
             bool fbSuccess = await PublishToFacebookOptimized(facebookMessage, blogUrl);
-
+            
             string linkedinMessage = GenerateLinkedInMessage("Noticias de tecnología", title, blogUrl);
             string linkedInResponse = "";
             try
             {
-                linkedInResponse = await PublishLinkedIn(linkedinMessage);
+                 linkedInResponse = await PublishLinkedIn(linkedinMessage);
             }
             catch (Exception ex)
             {
-                linkedInResponse = ex.Message;
+                 linkedInResponse = ex.Message;
             }
 
 
             return Ok(new
-            {
-                success = true,
-                title,
-                slug,
-                imageUrl,
-                facebookPublished = fbSuccess,
-                linkedinPublished = !string.IsNullOrEmpty(linkedInResponse) && !linkedInResponse.Contains("Exception")
-            });
-        }
-        private string GenerateLinkedInMessage(string keyword, string title, string blogUrl)
+        {
+            success = true,
+            title,
+            slug,
+            imageUrl,
+            facebookPublished = fbSuccess,
+            linkedinPublished = !string.IsNullOrEmpty(linkedInResponse) && !linkedInResponse.Contains("Exception")
+        });
+    }
+    private string GenerateLinkedInMessage(string keyword, string title, string blogUrl)
         {
             var intro = new[]
             {
@@ -1766,7 +1779,7 @@ Lee el análisis completo en nuestro blog:
                 return BadRequest(new { status = response.StatusCode, error = jsonResult });
             }
 
-
+          
         }
         [HttpGet("linkedin/callback")]
         public async Task<IActionResult> LinkedInCallback([FromQuery] string code)
@@ -1794,7 +1807,7 @@ Lee el análisis completo en nuestro blog:
 
             return Ok(result);
         }
-
+        
         // =========================
         // HELPERS
         // =========================
@@ -1846,7 +1859,7 @@ Lee el análisis completo en nuestro blog:
             catch
             {
                 // Si la red falla o Facebook rechaza la renovación, no tumbamos la API
-                return false;
+                return false; 
             }
         }
 
