@@ -449,8 +449,8 @@ namespace Api_blog.Controllers
                 var slug = GenerateSlug($"solucion-{selectedError.Split(' ')[0].ToLower()}");
                 if (await _context.BlogPosts.AnyAsync(p => p.Slug == slug)) return Ok("Solucion ya publicada.");
 
-                string cleanTitle = $"Guia: Solucionar {selectedError.Split(' ')[0]}";
-                var post = new BlogPost
+                // Esto toma los primeros 40 caracteres del error para que el título tenga sentido
+                string cleanTitle = $"Guia: Solucionar error {(selectedError.Length > 40 ? selectedError.Substring(0, 40) + "..." : selectedError)}"; var post = new BlogPost
                 {
                     Title = cleanTitle,
                     Slug = slug,
